@@ -1,32 +1,34 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { VoxelScene } from './three/scene.js';
-import { connect } from './net/ws.js';
-import { unpack, key } from './three/voxels.js';
+import { useEffect, useRef, useState } from "react";
+import type { OpSetVoxel } from "../../worker/src/schema.js";
+import { connect } from "./net/ws.js";
+import { VoxelScene } from "./three/scene.js";
+import { unpack } from "./three/voxels.js";
 
 export function App() {
+    // https://coolors.co/palette/f94144-f3722c-f8961e-f9844a-f9c74f-90be6d-43aa8b-4d908e-577590-277da1
+    const colors = [
+        "#f94144",
+        "#f3722c",
+        "#f8961e",
+        "#f9844a",
+        "#f9c74f",
+        "#90be6d",
+        "#43aa8b",
+        "#4d908e",
+        "#577590",
+        "#277da1",
+        "#000000",
+        "#ffffff",
+    ];
     const containerRef = useRef<HTMLDivElement>(null);
     const sceneRef = useRef<VoxelScene | null>(null);
-    const [currentColor, setCurrentColor] = useState('#ff0000');
+    const [currentColor, setCurrentColor] = useState(
+        colors[Math.floor(Math.random() * colors.length)]
+    );
     const [connected, setConnected] = useState(false);
-    const [roomSlug] = useState('demo');
-    const wsRef = useRef<any>(null);
+    const [roomSlug] = useState("demo");
+    const wsRef = useRef<{ setOps: (ops: OpSetVoxel[]) => void } | null>(null);
     const [voxelState, setVoxelState] = useState(new Map<number, string>());
-    const [myPlayerId, setMyPlayerId] = useState<string>('');
-    
-    const colors = [
-        '#FF6B9D', // Bright pink
-        '#FF9F40', // Bright orange
-        '#FFE066', // Bright yellow
-        '#4ECDC4', // Bright teal
-        '#45B7D1', // Bright blue
-        '#96CEB4', // Bright mint
-        '#FFEAA7', // Bright cream
-        '#DDA0DD', // Bright plum
-        '#98D8C8', // Bright aqua
-        '#F7DC6F', // Bright gold
-        '#BB8FCE', // Bright lavender
-        '#85C1E9'  // Bright sky
-    ];
 
     useEffect(() => {
         if (!containerRef.current) return;
@@ -37,7 +39,7 @@ export function App() {
         scene.setCurrentColor(currentColor);
         scene.setOnVoxelClick((k, color) => {
             // Optimistic update
-            setVoxelState(currentVoxels => {
+            setVoxelState((currentVoxels) => {
                 const newVoxels = new Map(currentVoxels);
                 if (color === null) {
                     newVoxels.delete(k);
@@ -48,22 +50,24 @@ export function App() {
             });
 
             if (wsRef.current) {
-                const ops = [{
-                    type: "set",
-                    k,
-                    color,
-                    t: Date.now(),
-                    by: localStorage.getItem("playerId")
-                }];
+                const ops = [
+                    {
+                        type: "set",
+                        k,
+                        color,
+                        t: Date.now(),
+                        by: localStorage.getItem("playerId"),
+                    },
+                ];
                 wsRef.current.setOps(ops);
             }
         });
 
         const { ws, setOps, sendPresence } = connect(
             roomSlug,
-            (ops, version) => {
+            (ops) => {
                 // Apply operations from server
-                setVoxelState(currentVoxels => {
+                setVoxelState((currentVoxels) => {
                     const newVoxels = new Map(currentVoxels);
                     for (const op of ops) {
                         if (op.color === null) {
@@ -77,7 +81,6 @@ export function App() {
             },
             (welcomeMsg) => {
                 setConnected(true);
-                setMyPlayerId(welcomeMsg.playerId);
                 const voxelMap = unpack(welcomeMsg.state);
                 setVoxelState(voxelMap);
             },
@@ -91,7 +94,7 @@ export function App() {
         );
 
         wsRef.current = { setOps };
-        
+
         // Set up cursor movement handling
         scene.setOnCursorMove((cursor) => {
             sendPresence(cursor);
@@ -107,7 +110,7 @@ export function App() {
         return () => {
             ws.close();
         };
-    }, [roomSlug]);
+    }, [roomSlug, currentColor]);
 
     useEffect(() => {
         if (sceneRef.current) {
@@ -122,50 +125,59 @@ export function App() {
     }, [voxelState]);
 
     return (
-        <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ 
-                padding: '10px', 
-                background: '#f0f0f0', 
-                color: '#333', 
-                display: 'flex', 
-                alignItems: 'center',
-                gap: '10px',
-                borderBottom: '1px solid #ddd'
-            }}>
-                <span>Status: {connected ? 'Connected' : 'Connecting...'}</span>
+        <div style={{ width: "100vw", height: "100vh", display: "flex", flexDirection: "column" }}>
+            <div
+                style={{
+                    padding: "10px",
+                    background: "#f0f0f0",
+                    color: "#333",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                    borderBottom: "1px solid #ddd",
+                }}
+            >
+                <span>Status: {connected ? "Connected" : "Connecting..."}</span>
                 <span>Room: {roomSlug}</span>
                 <span>Color:</span>
-                <input 
-                    type="color" 
-                    value={currentColor} 
+                <input
+                    type="color"
+                    value={currentColor}
                     onChange={(e) => setCurrentColor(e.target.value)}
-                    style={{ width: '40px', height: '30px' }}
+                    style={{ width: "40px", height: "30px" }}
                 />
-                <div style={{ display: 'flex', gap: '5px' }}>
-                    {colors.map(color => (
-                        <div
+                <div style={{ display: "flex", gap: "5px" }}>
+                    {colors.map((color) => (
+                        <button
                             key={color}
+                            type="button"
                             onClick={() => setCurrentColor(color)}
                             style={{
-                                width: '30px',
-                                height: '30px',
+                                width: "30px",
+                                height: "30px",
                                 backgroundColor: color,
-                                border: color === currentColor ? '3px solid #333' : '1px solid #ccc',
-                                cursor: 'pointer'
+                                border:
+                                    color === currentColor ? "3px solid #333" : "1px solid #ccc",
+                                cursor: "pointer",
+                                padding: 0,
                             }}
+                            aria-label={`Select color ${color}`}
                         />
                     ))}
                 </div>
             </div>
             <div ref={containerRef} style={{ flex: 1 }} />
-            <div style={{ 
-                padding: '10px', 
-                background: '#f0f0f0', 
-                color: '#666', 
-                fontSize: '12px',
-                borderTop: '1px solid #ddd'
-            }}>
-                Left click to place voxel • Ctrl+click or right click to erase • Drag to rotate • Wheel to zoom
+            <div
+                style={{
+                    padding: "10px",
+                    background: "#f0f0f0",
+                    color: "#666",
+                    fontSize: "12px",
+                    borderTop: "1px solid #ddd",
+                }}
+            >
+                Left click to place voxel • Ctrl+click or right click to erase • Drag to rotate •
+                Wheel to zoom
             </div>
         </div>
     );

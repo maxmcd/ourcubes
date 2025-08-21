@@ -1,14 +1,18 @@
-export type ApplyHandler = (ops: any[], version: number) => void;
-export type PresenceHandler = (players: Array<{playerId: string, cursor?: [number, number, number]}>) => void;
+import type { OpSetVoxel, PackedState } from "../../worker/src/schema.js";
+
+export type ApplyHandler = (ops: OpSetVoxel[], version: number) => void;
+export type PresenceHandler = (
+    players: Array<{ playerId: string; cursor?: [number, number, number] }>
+) => void;
 
 export function connect(
     slug: string,
     onApply: ApplyHandler,
-    onWelcome: (state: any) => void,
+    onWelcome: (state: { state: PackedState; playerId: string; version: number }) => void,
     onPresence?: PresenceHandler
 ) {
     // In development, connect directly to the worker port
-    const workerHost = location.hostname === 'localhost' ? 'localhost:8787' : location.host;
+    const workerHost = location.hostname === "localhost" ? "localhost:8787" : location.host;
     const ws = new WebSocket(
         `${location.protocol === "https:" ? "wss" : "ws"}://${workerHost}/api/room/${slug}/ws`
     );
@@ -34,10 +38,10 @@ export function connect(
         }
     };
 
-    function setOps(ops: any[]) {
+    function setOps(ops: OpSetVoxel[]) {
         ws.send(JSON.stringify({ type: "set", ops }));
     }
-    
+
     function sendPresence(cursor: [number, number, number] | null) {
         if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: "presence", cursor }));

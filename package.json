@@ -1,0 +1,23 @@
+{
+  "name": "ourcubes",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "lint": "biome lint worker/src web/src",
+    "lint:fix": "biome lint --write worker/src web/src",
+    "format": "biome format worker/src web/src",
+    "format:fix": "biome format --write worker/src web/src",
+    "check": "biome check worker/src web/src",
+    "check:fix": "biome check --write worker/src web/src",
+    "dev:worker": "cd worker && npm run dev",
+    "dev:web": "cd web && npm run dev",
+    "type-check": "cd worker && npm run type-check && cd ../web && npm run type-check"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@biomejs/biome": "^2.2.0"
+  }
+}

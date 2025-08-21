@@ -22,7 +22,7 @@ export interface OpSetVoxel {
     by?: string; // playerId
 }
 
-export type PackedState = Array<[VoxelKey, string]>; // color hex; empty voxels omitted
+export type PackedState = [VoxelKey, string][]; // color hex; empty voxels omitted
 
 export interface PlayerPresence {
     playerId: string;

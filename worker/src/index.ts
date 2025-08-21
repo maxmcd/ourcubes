@@ -1,5 +1,5 @@
 import { VoxelRoomDO } from "./room";
-import { Env } from "./schema";
+import type { Env } from "./schema";
 
 export default {
     async fetch(req: Request, env: Env) {
@@ -10,10 +10,7 @@ export default {
             const id = env.VOXEL_ROOM.idFromName(slug);
             const stub = env.VOXEL_ROOM.get(id);
             return stub.fetch(
-                new Request(
-                    new URL(`/api/room/${slug}/${action}`, "http://do").toString(),
-                    req
-                )
+                new Request(new URL(`/api/room/${slug}/${action}`, "http://do").toString(), req)
             );
         }
         // static assets (if bundling UI with worker) or redirect to Pages site

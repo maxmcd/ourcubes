@@ -1,4 +1,12 @@
-import { CanvasState, PackedState, OpSetVoxel, Env, ServerMsg, ClientMsg, PlayerPresence } from './schema';
+import type {
+    CanvasState,
+    ClientMsg,
+    Env,
+    OpSetVoxel,
+    PackedState,
+    PlayerPresence,
+    ServerMsg,
+} from "./schema";
 
 export class VoxelRoomDO {
     state: DurableObjectState;
@@ -17,7 +25,7 @@ export class VoxelRoomDO {
         this.state = state;
         this.env = env;
         state.blockConcurrencyWhile(async () => {
-            const meta = await state.storage.get<any>("meta");
+            const meta = await state.storage.get<{ version: number; lamport: number }>("meta");
             const packed = await state.storage.get<PackedState>("voxels");
             if (meta) {
                 this.canvas.version = meta.version ?? 0;
@@ -50,7 +58,10 @@ export class VoxelRoomDO {
         }
 
         if (path.endsWith("/seed") && req.method === "POST") {
-            if (this.env.ROOM_SEED_SECRET && req.headers.get("x-seed") !== this.env.ROOM_SEED_SECRET) {
+            if (
+                this.env.ROOM_SEED_SECRET &&
+                req.headers.get("x-seed") !== this.env.ROOM_SEED_SECRET
+            ) {
                 return new Response("forbidden", { status: 403 });
             }
             await this.seedDemo();
@@ -60,7 +71,7 @@ export class VoxelRoomDO {
         return new Response("not found", { status: 404 });
     }
 
-    async handleSocket(ws: WebSocket, req: Request) {
+    async handleSocket(ws: WebSocket, _req: Request) {
         ws.accept();
         this.connections.add(ws);
         this.bucketMap.set(ws, { tokens: 80, last: Date.now() });
@@ -79,76 +90,7 @@ export class VoxelRoomDO {
                 return;
             }
 
-            if (msg.type === "hello") {
-                const playerId = msg.playerId ?? this.randomId();
-                
-                // Store this player's presence
-                this.playerPresence.set(ws, { playerId });
-                
-                send({
-                    type: "welcome",
-                    playerId,
-                    state: this.packState(),
-                    version: this.canvas.version,
-                });
-                return;
-            }
-
-            if (msg.type === "ping") {
-                send({ type: "pong", at: msg.at, now: Date.now() });
-                return;
-            }
-
-            if (msg.type === "set" && Array.isArray(msg.ops)) {
-                if (!this.checkBucket(ws, msg.ops.length)) {
-                    send({
-                        type: "reject",
-                        reason: "rate",
-                        retryAfterMs: 1000,
-                    });
-                    return;
-                }
-                const applied: OpSetVoxel[] = [];
-                for (const op of msg.ops) {
-                    const k = op.k | 0;
-                    if (k < 0 || k >= 8000) continue;
-                    this.canvas.lamport = Math.max(this.canvas.lamport + 1, (op.t | 0) + 1);
-                    const t = this.canvas.lamport;
-                    if (op.color === null) {
-                        const cur = this.canvas.voxels.get(k);
-                        if (!cur || t < (cur.t ?? 0)) continue;
-                        this.canvas.voxels.delete(k);
-                        applied.push({ type: "set", k, color: null, t, by: op.by });
-                    } else {
-                        const cur = this.canvas.voxels.get(k);
-                        if (cur && t < (cur.t ?? 0)) continue;
-                        this.canvas.voxels.set(k, { color: op.color, t, by: op.by });
-                        applied.push({ type: "set", k, color: op.color, t, by: op.by });
-                    }
-                }
-                if (applied.length) {
-                    this.canvas.version++;
-                    await this.persistMaybe();
-                    this.broadcast({ type: "apply", ops: applied, version: this.canvas.version });
-                }
-                return;
-            }
-
-            if (msg.type === "presence") {
-                const presence = this.playerPresence.get(ws);
-                if (presence) {
-                    // Update cursor position - create a new object to ensure it's updated
-                    const updatedPresence = {
-                        playerId: presence.playerId,
-                        cursor: msg.cursor
-                    };
-                    this.playerPresence.set(ws, updatedPresence);
-                    
-                    // Broadcast updated presence to all other clients
-                    this.broadcastPresence();
-                }
-                return;
-            }
+            await this.handleMessage(msg, ws, send);
         });
 
         ws.addEventListener("close", () => {
@@ -158,6 +100,104 @@ export class VoxelRoomDO {
             // Broadcast updated presence when someone leaves
             this.broadcastPresence();
         });
+    }
+
+    private async handleMessage(msg: ClientMsg, ws: WebSocket, send: (msg: ServerMsg) => void) {
+        if (msg.type === "hello") {
+            await this.handleHello(msg, ws, send);
+            return;
+        }
+
+        if (msg.type === "ping") {
+            send({ type: "pong", at: msg.at, now: Date.now() });
+            return;
+        }
+
+        if (msg.type === "set" && Array.isArray(msg.ops)) {
+            await this.handleSetOps(msg, ws, send);
+            return;
+        }
+
+        if (msg.type === "presence") {
+            this.handlePresence(msg, ws);
+            return;
+        }
+    }
+
+    private async handleHello(
+        msg: { playerId?: string },
+        ws: WebSocket,
+        send: (msg: ServerMsg) => void
+    ) {
+        const playerId = msg.playerId ?? this.randomId();
+        this.playerPresence.set(ws, { playerId });
+        send({
+            type: "welcome",
+            playerId,
+            state: this.packState(),
+            version: this.canvas.version,
+        });
+    }
+
+    private async handleSetOps(
+        msg: { ops: OpSetVoxel[] },
+        ws: WebSocket,
+        send: (msg: ServerMsg) => void
+    ) {
+        if (!this.checkBucket(ws, msg.ops.length)) {
+            send({
+                type: "reject",
+                reason: "rate",
+                retryAfterMs: 1000,
+            });
+            return;
+        }
+
+        const applied: OpSetVoxel[] = [];
+        for (const op of msg.ops) {
+            const appliedOp = this.processVoxelOp(op);
+            if (appliedOp) {
+                applied.push(appliedOp);
+            }
+        }
+
+        if (applied.length) {
+            this.canvas.version++;
+            await this.persistMaybe();
+            this.broadcast({ type: "apply", ops: applied, version: this.canvas.version });
+        }
+    }
+
+    private processVoxelOp(op: OpSetVoxel): OpSetVoxel | null {
+        const k = op.k | 0;
+        if (k < 0 || k >= 8000) return null;
+
+        this.canvas.lamport = Math.max(this.canvas.lamport + 1, (op.t | 0) + 1);
+        const t = this.canvas.lamport;
+
+        if (op.color === null) {
+            const cur = this.canvas.voxels.get(k);
+            if (!cur || t < (cur.t ?? 0)) return null;
+            this.canvas.voxels.delete(k);
+            return { type: "set", k, color: null, t, by: op.by };
+        } else {
+            const cur = this.canvas.voxels.get(k);
+            if (cur && t < (cur.t ?? 0)) return null;
+            this.canvas.voxels.set(k, { color: op.color, t, by: op.by });
+            return { type: "set", k, color: op.color, t, by: op.by };
+        }
+    }
+
+    private handlePresence(msg: { cursor?: [number, number, number] }, ws: WebSocket) {
+        const presence = this.playerPresence.get(ws);
+        if (presence) {
+            const updatedPresence = {
+                playerId: presence.playerId,
+                cursor: msg.cursor,
+            };
+            this.playerPresence.set(ws, updatedPresence);
+            this.broadcastPresence();
+        }
     }
 
     broadcast(msg: ServerMsg) {

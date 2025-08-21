@@ -1,6 +1,6 @@
-import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { key, unpack, unpackKey } from './voxels.js';
+import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { key, unpackKey } from "./voxels.js";
 
 export class VoxelScene {
     private scene: THREE.Scene;
@@ -50,7 +50,7 @@ export class VoxelScene {
         const geometry = new THREE.BoxGeometry(1, 1, 1);
         const material = new THREE.MeshToonMaterial({
             color: 0xffffff,
-            transparent: false
+            transparent: false,
         });
         this.instancedMesh = new THREE.InstancedMesh(geometry, material, 8000);
         this.instancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -65,7 +65,7 @@ export class VoxelScene {
         const borderMaterial = new THREE.MeshBasicMaterial({
             color: 0x000000,
             transparent: true,
-            opacity: 0.1
+            opacity: 0.1,
         });
         this.borderMesh = new THREE.InstancedMesh(borderGeometry, borderMaterial, 8000);
         this.borderMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -80,7 +80,7 @@ export class VoxelScene {
         const highlightMaterial = new THREE.LineBasicMaterial({
             color: 0x333333,
             transparent: true,
-            opacity: 0.6
+            opacity: 0.6,
         });
         this.highlightMesh = new THREE.LineSegments(highlightEdges, highlightMaterial);
         this.scene.add(this.highlightMesh);
@@ -123,7 +123,7 @@ export class VoxelScene {
         const invisibleMaterial = new THREE.MeshBasicMaterial({
             visible: false,
             transparent: true,
-            opacity: 0
+            opacity: 0,
         });
 
         for (let y = 0; y < 20; y++) {
@@ -142,7 +142,7 @@ export class VoxelScene {
         const lineMaterial = new THREE.LineBasicMaterial({
             color: 0xcccccc,
             transparent: true,
-            opacity: 0.4
+            opacity: 0.4,
         });
         const boundingBox = new THREE.LineSegments(edges, lineMaterial);
         boundingBox.position.set(9.5, 9.5, 9.5); // Center the box
@@ -152,7 +152,7 @@ export class VoxelScene {
     private setupEventListeners() {
         const canvas = this.renderer.domElement;
 
-        canvas.addEventListener('mousemove', (event) => {
+        canvas.addEventListener("mousemove", (event) => {
             const rect = canvas.getBoundingClientRect();
             this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
             this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -160,90 +160,121 @@ export class VoxelScene {
             this.updateHighlight();
         });
 
-        canvas.addEventListener('mousedown', (event) => {
-            if (event.button === 0 || event.button === 2) {
-                event.preventDefault();
-                event.stopPropagation();
-
-                if (event.button === 2 || (event.button === 0 && event.ctrlKey)) {
-                    // Right-click or Ctrl+left-click: try to remove an existing voxel
-                    const existingVoxelResult = this.getExistingVoxelAtMouse();
-                    if (existingVoxelResult !== null) {
-                        this.onVoxelClick?.(existingVoxelResult, null);
-                    }
-                } else if (event.button === 0) {
-                    // Left-click (without Ctrl): try to place a new voxel
-                    const k = this.getVoxelAtMouse();
-                    if (k !== null) {
-                        this.onVoxelClick?.(k, this.currentColor);
-                    }
-                }
-            }
+        canvas.addEventListener("mousedown", (event) => {
+            this.handleMouseDown(event);
         });
 
-        canvas.addEventListener('contextmenu', (event) => {
+        canvas.addEventListener("contextmenu", (event) => {
             event.preventDefault();
         });
 
-        window.addEventListener('resize', () => {
+        window.addEventListener("resize", () => {
             this.camera.aspect = canvas.clientWidth / canvas.clientHeight;
             this.camera.updateProjectionMatrix();
             this.renderer.setSize(canvas.clientWidth, canvas.clientHeight);
         });
     }
 
+    private handleMouseDown(event: MouseEvent) {
+        if (event.button === 0 || event.button === 2) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            if (event.button === 2 || (event.button === 0 && event.ctrlKey)) {
+                this.handleVoxelRemoval();
+            } else if (event.button === 0) {
+                this.handleVoxelPlacement();
+            }
+        }
+    }
+
+    private handleVoxelRemoval() {
+        const existingVoxelResult = this.getExistingVoxelAtMouse();
+        if (existingVoxelResult !== null) {
+            this.onVoxelClick?.(existingVoxelResult, null);
+        }
+    }
+
+    private handleVoxelPlacement() {
+        const k = this.getVoxelAtMouse();
+        if (k !== null) {
+            this.onVoxelClick?.(k, this.currentColor);
+        }
+    }
+
     private getVoxelAtMouse(): number | null {
         this.raycaster.setFromCamera(this.mouse, this.camera);
 
-        // Check intersections with existing voxels first (for adjacent placement)
-        if (this.instancedMesh.count > 0) {
-            const voxelIntersects = this.raycaster.intersectObject(this.instancedMesh, false);
-            if (voxelIntersects.length > 0) {
-                const intersect = voxelIntersects[0];
-                const instanceId = intersect.instanceId;
-                if (instanceId !== undefined && intersect.face) {
-                    // Get the position of the clicked voxel
-                    const matrix = new THREE.Matrix4();
-                    this.instancedMesh.getMatrixAt(instanceId, matrix);
-                    const position = new THREE.Vector3();
-                    matrix.decompose(position, new THREE.Quaternion(), new THREE.Vector3());
-
-                    // Get the face normal (this is in local space, already correct for a cube)
-                    const normal = intersect.face.normal.clone();
-
-                    // Calculate adjacent position by adding the normal to the clicked voxel's position
-                    const newPos = position.clone().add(normal);
-                    const x = Math.round(newPos.x);
-                    const y = Math.round(newPos.y);
-                    const z = Math.round(newPos.z);
-
-                    // Check bounds and ensure we're not placing on an existing voxel
-                    if (x >= 0 && x < 20 && y >= 0 && y < 20 && z >= 0 && z < 20) {
-                        const newKey = key(x, y, z);
-                        // Don't place if there's already a voxel there
-                        if (!this.voxelMap.has(newKey)) {
-                            return newKey;
-                        }
-                    }
-                }
-            }
+        // Check for adjacent placement first
+        const adjacentKey = this.getAdjacentVoxelPlacement();
+        if (adjacentKey !== null) {
+            return adjacentKey;
         }
 
-        // Only allow placement on the ground plane (y=0) if no voxels exist
-        // This gives users a starting surface like Minecraft bedrock
-        const groundPlaneIntersects = this.raycaster.intersectObject(this.gridPlanes[0]); // y=0 plane
-        if (groundPlaneIntersects.length > 0) {
-            const intersect = groundPlaneIntersects[0];
-            const point = intersect.point;
+        // Fall back to ground plane
+        return this.getGroundPlacement();
+    }
 
-            const x = Math.floor(Math.max(0, Math.min(19, point.x)));
-            const y = 0; // Always ground level for initial placement
-            const z = Math.floor(Math.max(0, Math.min(19, point.z)));
+    private getAdjacentVoxelPlacement(): number | null {
+        if (this.instancedMesh.count === 0) return null;
 
-            return key(x, y, z);
+        const voxelIntersects = this.raycaster.intersectObject(this.instancedMesh, false);
+        if (voxelIntersects.length === 0) return null;
+
+        const intersect = voxelIntersects[0];
+        const instanceId = intersect.instanceId;
+        if (instanceId === undefined || !intersect.face) return null;
+
+        const voxelPosition = this.getVoxelPosition(instanceId);
+        if (!voxelPosition) return null;
+
+        const normal = intersect.face.normal.clone();
+        const newPos = voxelPosition.clone().add(normal);
+        const coords = {
+            x: Math.round(newPos.x),
+            y: Math.round(newPos.y),
+            z: Math.round(newPos.z),
+        };
+
+        return this.validateVoxelPlacement(coords);
+    }
+
+    private getVoxelPosition(instanceId: number): THREE.Vector3 | null {
+        const matrix = new THREE.Matrix4();
+        this.instancedMesh.getMatrixAt(instanceId, matrix);
+        const position = new THREE.Vector3();
+        matrix.decompose(position, new THREE.Quaternion(), new THREE.Vector3());
+        return position;
+    }
+
+    private validateVoxelPlacement(coords: { x: number; y: number; z: number }): number | null {
+        if (
+            coords.x < 0 ||
+            coords.x >= 20 ||
+            coords.y < 0 ||
+            coords.y >= 20 ||
+            coords.z < 0 ||
+            coords.z >= 20
+        ) {
+            return null;
         }
 
-        return null;
+        const newKey = key(coords.x, coords.y, coords.z);
+        if (this.voxelMap.has(newKey)) {
+            return null;
+        }
+
+        return newKey;
+    }
+
+    private getGroundPlacement(): number | null {
+        const groundPlaneIntersects = this.raycaster.intersectObject(this.gridPlanes[0]);
+        if (groundPlaneIntersects.length === 0) return null;
+
+        const point = groundPlaneIntersects[0].point;
+        const x = Math.floor(Math.max(0, Math.min(19, point.x)));
+        const z = Math.floor(Math.max(0, Math.min(19, point.z)));
+        return key(x, 0, z);
     }
 
     private getExistingVoxelAtMouse(): number | null {
@@ -280,19 +311,21 @@ export class VoxelScene {
             const [x, y, z] = unpackKey(k);
             this.highlightMesh.position.set(x, y, z);
             this.highlightMesh.visible = true;
-            
+
             // Send cursor position to other players (only if it changed)
             const newCursor: [number, number, number] = [x, y, z];
-            if (!this.lastCursorSent || 
-                this.lastCursorSent[0] !== newCursor[0] || 
-                this.lastCursorSent[1] !== newCursor[1] || 
-                this.lastCursorSent[2] !== newCursor[2]) {
+            if (
+                !this.lastCursorSent ||
+                this.lastCursorSent[0] !== newCursor[0] ||
+                this.lastCursorSent[1] !== newCursor[1] ||
+                this.lastCursorSent[2] !== newCursor[2]
+            ) {
                 this.lastCursorSent = newCursor;
                 this.onCursorMove?.(newCursor);
             }
         } else {
             this.highlightMesh.visible = false;
-            
+
             // Send null cursor (no hover) to other players (only if it changed)
             if (this.lastCursorSent !== null) {
                 this.lastCursorSent = null;
@@ -318,34 +351,41 @@ export class VoxelScene {
         this.updateInstancedMesh();
     }
 
-    updatePlayerPresence(players: Array<{playerId: string, cursor?: [number, number, number]}>, myPlayerId: string) {
+    updatePlayerPresence(
+        players: Array<{ playerId: string; cursor?: [number, number, number] }>,
+        myPlayerId: string
+    ) {
         // Remove cursors for players no longer present
         for (const [playerId, cursorMesh] of this.otherPlayerCursors.entries()) {
-            const playerStillPresent = players.some(p => p.playerId === playerId && p.playerId !== myPlayerId);
+            const playerStillPresent = players.some(
+                (p) => p.playerId === playerId && p.playerId !== myPlayerId
+            );
             if (!playerStillPresent) {
                 this.scene.remove(cursorMesh);
                 this.otherPlayerCursors.delete(playerId);
             }
         }
-        
+
         // Update or create cursors for other players
         for (const player of players) {
             if (player.playerId === myPlayerId || !player.cursor) continue; // Skip self and players without cursors
-            
+
             let cursorMesh = this.otherPlayerCursors.get(player.playerId);
             if (!cursorMesh) {
                 // Create new cursor mesh for this player
-                const cursorGeometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(1.1, 1.1, 1.1));
+                const cursorGeometry = new THREE.EdgesGeometry(
+                    new THREE.BoxGeometry(1.1, 1.1, 1.1)
+                );
                 const cursorMaterial = new THREE.LineBasicMaterial({
                     color: this.getPlayerColor(player.playerId),
                     transparent: true,
-                    opacity: 0.8
+                    opacity: 0.8,
                 });
                 cursorMesh = new THREE.LineSegments(cursorGeometry, cursorMaterial);
                 this.scene.add(cursorMesh);
                 this.otherPlayerCursors.set(player.playerId, cursorMesh);
             }
-            
+
             // Update cursor position
             const [x, y, z] = player.cursor;
             cursorMesh.position.set(x, y, z);
