@@ -10,9 +10,13 @@
     "format:fix": "biome format --write worker/src web/src",
     "check": "biome check worker/src web/src",
     "check:fix": "biome check --write worker/src web/src",
+    "test": "cd worker && npm test && cd ../web && npm test",
+    "test:worker": "cd worker && npm test",
+    "test:web": "cd web && npm test",
     "dev:worker": "cd worker && npm run dev",
     "dev:web": "cd web && npm run dev",
-    "type-check": "cd worker && npm run type-check && cd ../web && npm run type-check"
+    "type-check": "cd worker && npm run type-check && cd ../web && npm run type-check",
+    "deploy": "cd worker && npm run deploy && cd ../web && npm run build && wrangler pages deploy dist --project-name ourcubes --commit-dirty=true"
   },
   "keywords": [],
   "author": "",

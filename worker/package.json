@@ -5,6 +5,9 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "build": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "biome lint src",
     "lint:fix": "biome lint --write src",
     "format": "biome format src",
@@ -16,6 +19,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.2.0",
     "@cloudflare/workers-types": "^4.20250821.0",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
   }
 }

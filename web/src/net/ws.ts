@@ -12,7 +12,16 @@ export function connect(
     onPresence?: PresenceHandler
 ) {
     // In development, connect directly to the worker port
-    const workerHost = location.hostname === "localhost" ? "localhost:8787" : location.host;
+    // In production, connect to the deployed worker
+    let workerHost: string;
+    if (location.hostname === "localhost") {
+        workerHost = "localhost:8787";
+    } else if (location.hostname.endsWith(".pages.dev")) {
+        workerHost = "voxel-canvas.maxm.workers.dev";
+    } else {
+        // For custom domains, assume the worker is on the same domain with /api
+        workerHost = location.host;
+    }
     const ws = new WebSocket(
         `${location.protocol === "https:" ? "wss" : "ws"}://${workerHost}/api/room/${slug}/ws`
     );

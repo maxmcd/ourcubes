@@ -6,6 +6,16 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': 'http://localhost:8787'
+    },
+    // Enable client-side routing fallback
+    historyApiFallback: true
+  },
+  // Enable client-side routing for build
+  build: {
+    rollupOptions: {
+      input: {
+        main: './index.html'
+      }
     }
   }
 });

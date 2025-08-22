@@ -1,184 +1,48 @@
-import { useEffect, useRef, useState } from "react";
-import type { OpSetVoxel } from "../../worker/src/schema.js";
-import { connect } from "./net/ws.js";
-import { VoxelScene } from "./three/scene.js";
-import { unpack } from "./three/voxels.js";
+import { useEffect, useState } from "react";
+import { GameRoom } from "./components/GameRoom.js";
+import { HomePage } from "./components/HomePage.js";
+
+type AppState = { view: "home" } | { view: "room"; roomSlug: string };
 
 export function App() {
-    // https://coolors.co/palette/f94144-f3722c-f8961e-f9844a-f9c74f-90be6d-43aa8b-4d908e-577590-277da1
-    const colors = [
-        "#f94144",
-        "#f3722c",
-        "#f8961e",
-        "#f9844a",
-        "#f9c74f",
-        "#90be6d",
-        "#43aa8b",
-        "#4d908e",
-        "#577590",
-        "#277da1",
-        "#000000",
-        "#ffffff",
-    ];
-    const containerRef = useRef<HTMLDivElement>(null);
-    const sceneRef = useRef<VoxelScene | null>(null);
-    const [currentColor, setCurrentColor] = useState(
-        colors[Math.floor(Math.random() * colors.length)]
-    );
-    const [connected, setConnected] = useState(false);
-    const [roomSlug] = useState("demo");
-    const wsRef = useRef<{ setOps: (ops: OpSetVoxel[]) => void } | null>(null);
-    const [voxelState, setVoxelState] = useState(new Map<number, string>());
+    const [appState, setAppState] = useState<AppState>({ view: "home" });
 
+    // Handle URL routing
     useEffect(() => {
-        if (!containerRef.current) return;
+        const handlePopState = () => {
+            const path = window.location.pathname;
+            const roomMatch = path.match(/^\/room\/([a-z0-9-]+)$/);
 
-        const scene = new VoxelScene(containerRef.current);
-        sceneRef.current = scene;
-
-        scene.setCurrentColor(currentColor);
-        scene.setOnVoxelClick((k, color) => {
-            // Optimistic update
-            setVoxelState((currentVoxels) => {
-                const newVoxels = new Map(currentVoxels);
-                if (color === null) {
-                    newVoxels.delete(k);
-                } else {
-                    newVoxels.set(k, color);
-                }
-                return newVoxels;
-            });
-
-            if (wsRef.current) {
-                const ops = [
-                    {
-                        type: "set",
-                        k,
-                        color,
-                        t: Date.now(),
-                        by: localStorage.getItem("playerId"),
-                    },
-                ];
-                wsRef.current.setOps(ops);
+            if (roomMatch) {
+                setAppState({ view: "room", roomSlug: roomMatch[1] });
+            } else {
+                setAppState({ view: "home" });
             }
-        });
-
-        const { ws, setOps, sendPresence } = connect(
-            roomSlug,
-            (ops) => {
-                // Apply operations from server
-                setVoxelState((currentVoxels) => {
-                    const newVoxels = new Map(currentVoxels);
-                    for (const op of ops) {
-                        if (op.color === null) {
-                            newVoxels.delete(op.k);
-                        } else {
-                            newVoxels.set(op.k, op.color);
-                        }
-                    }
-                    return newVoxels;
-                });
-            },
-            (welcomeMsg) => {
-                setConnected(true);
-                const voxelMap = unpack(welcomeMsg.state);
-                setVoxelState(voxelMap);
-            },
-            (players) => {
-                // Handle presence updates
-                const currentPlayerId = localStorage.getItem("playerId") || "";
-                if (sceneRef.current && currentPlayerId) {
-                    sceneRef.current.updatePlayerPresence(players, currentPlayerId);
-                }
-            }
-        );
-
-        wsRef.current = { setOps };
-
-        // Set up cursor movement handling
-        scene.setOnCursorMove((cursor) => {
-            sendPresence(cursor);
-        });
-
-        // Animation loop
-        const animate = () => {
-            requestAnimationFrame(animate);
-            scene.render();
         };
-        animate();
 
-        return () => {
-            ws.close();
-        };
-    }, [roomSlug, currentColor]);
+        // Handle initial route
+        handlePopState();
 
-    useEffect(() => {
-        if (sceneRef.current) {
-            sceneRef.current.setCurrentColor(currentColor);
-        }
-    }, [currentColor]);
+        // Listen for browser back/forward
+        window.addEventListener("popstate", handlePopState);
 
-    useEffect(() => {
-        if (sceneRef.current) {
-            sceneRef.current.updateVoxels(voxelState);
-        }
-    }, [voxelState]);
+        return () => window.removeEventListener("popstate", handlePopState);
+    }, []);
 
-    return (
-        <div style={{ width: "100vw", height: "100vh", display: "flex", flexDirection: "column" }}>
-            <div
-                style={{
-                    padding: "10px",
-                    background: "#f0f0f0",
-                    color: "#333",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "10px",
-                    borderBottom: "1px solid #ddd",
-                }}
-            >
-                <span>Status: {connected ? "Connected" : "Connecting..."}</span>
-                <span>Room: {roomSlug}</span>
-                <span>Color:</span>
-                <input
-                    type="color"
-                    value={currentColor}
-                    onChange={(e) => setCurrentColor(e.target.value)}
-                    style={{ width: "40px", height: "30px" }}
-                />
-                <div style={{ display: "flex", gap: "5px" }}>
-                    {colors.map((color) => (
-                        <button
-                            key={color}
-                            type="button"
-                            onClick={() => setCurrentColor(color)}
-                            style={{
-                                width: "30px",
-                                height: "30px",
-                                backgroundColor: color,
-                                border:
-                                    color === currentColor ? "3px solid #333" : "1px solid #ccc",
-                                cursor: "pointer",
-                                padding: 0,
-                            }}
-                            aria-label={`Select color ${color}`}
-                        />
-                    ))}
-                </div>
-            </div>
-            <div ref={containerRef} style={{ flex: 1 }} />
-            <div
-                style={{
-                    padding: "10px",
-                    background: "#f0f0f0",
-                    color: "#666",
-                    fontSize: "12px",
-                    borderTop: "1px solid #ddd",
-                }}
-            >
-                Left click to place voxel • Ctrl+click or right click to erase • Drag to rotate •
-                Wheel to zoom
-            </div>
-        </div>
-    );
+    const handleJoinRoom = (roomSlug: string) => {
+        const sanitizedRoomSlug = roomSlug.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+        window.history.pushState({}, "", `/room/${sanitizedRoomSlug}`);
+        setAppState({ view: "room", roomSlug: sanitizedRoomSlug });
+    };
+
+    const handleLeaveRoom = () => {
+        window.history.pushState({}, "", "/");
+        setAppState({ view: "home" });
+    };
+
+    if (appState.view === "home") {
+        return <HomePage onJoinRoom={handleJoinRoom} />;
+    }
+
+    return <GameRoom roomSlug={appState.roomSlug} onLeaveRoom={handleLeaveRoom} />;
 }
