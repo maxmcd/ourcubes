@@ -21,7 +21,7 @@ class MockWebSocket {
 
         // Simulate connection opening
         setTimeout(() => {
-            this.readyState = WebSocket.OPEN;
+            this.readyState = MockWebSocket.OPEN;
             if (this.onopen) {
                 this.onopen(new Event("open"));
             }
@@ -33,7 +33,7 @@ class MockWebSocket {
     }
 
     close() {
-        this.readyState = WebSocket.CLOSED;
+        this.readyState = MockWebSocket.CLOSED;
         if (this.onclose) {
             this.onclose(new CloseEvent("close"));
         }
@@ -66,6 +66,11 @@ describe("WebSocket Connection", () => {
     beforeEach(() => {
         // Mock global objects
         global.WebSocket = MockWebSocket as typeof WebSocket;
+        // Ensure WebSocket constants are available globally
+        (global.WebSocket as any).OPEN = MockWebSocket.OPEN;
+        (global.WebSocket as any).CLOSED = MockWebSocket.CLOSED;
+        (global.WebSocket as any).CONNECTING = MockWebSocket.CONNECTING;
+        (global.WebSocket as any).CLOSING = MockWebSocket.CLOSING;
         global.localStorage = mockLocalStorage as Storage;
 
         // Mock location object
@@ -213,6 +218,11 @@ describe("WebSocket Connection", () => {
         const mockWs = new MockWebSocket("ws://test");
         const sendSpy = vi.spyOn(mockWs, "send");
         global.WebSocket = vi.fn().mockImplementation(() => mockWs);
+        // Add constants after overriding WebSocket constructor
+        (global.WebSocket as any).OPEN = MockWebSocket.OPEN;
+        (global.WebSocket as any).CLOSED = MockWebSocket.CLOSED;
+        (global.WebSocket as any).CONNECTING = MockWebSocket.CONNECTING;
+        (global.WebSocket as any).CLOSING = MockWebSocket.CLOSING;
 
         const { setOps, sendPresence } = connect("test-room", mockOnApply, mockOnWelcome);
 
@@ -232,8 +242,9 @@ describe("WebSocket Connection", () => {
         setOps(testOps);
         expect(sendSpy).toHaveBeenCalledWith(JSON.stringify({ type: "set", ops: testOps }));
 
-        // Test sendPresence
-        mockWs.readyState = WebSocket.OPEN;
+        // Clear previous calls and test sendPresence
+        sendSpy.mockClear();
+        mockWs.readyState = MockWebSocket.OPEN;
         sendPresence([5, 10, 15]);
         expect(sendSpy).toHaveBeenCalledWith(
             JSON.stringify({ type: "presence", cursor: [5, 10, 15] })
@@ -270,7 +281,7 @@ describe("WebSocket Connection", () => {
 
         const mockWs = new MockWebSocket("ws://test");
         const sendSpy = vi.spyOn(mockWs, "send");
-        mockWs.readyState = WebSocket.CONNECTING; // Not open
+        mockWs.readyState = MockWebSocket.CONNECTING; // Not open
         global.WebSocket = vi.fn().mockImplementation(() => mockWs);
 
         const { sendPresence } = connect("test-room", mockOnApply, mockOnWelcome);
