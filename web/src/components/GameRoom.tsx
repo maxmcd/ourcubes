@@ -34,12 +34,15 @@ export function GameRoom({ roomSlug, onLeaveRoom }: GameRoomProps) {
     const wsRef = useRef<{ setOps: (ops: OpSetVoxel[]) => void } | null>(null);
     const [voxelState, setVoxelState] = useState(new Map<number, string>());
 
+    // biome-ignore lint/correctness/useExhaustiveDependencies: currentColor intentionally not in deps to avoid scene recreation
     useEffect(() => {
         if (!containerRef.current) return;
 
         const scene = new VoxelScene(containerRef.current);
         sceneRef.current = scene;
 
+        // Initialize with current color - this is intentionally not in dependency array
+        // to avoid recreating scene on color changes
         scene.setCurrentColor(currentColor);
         scene.setOnVoxelClick((k, color) => {
             // Optimistic update

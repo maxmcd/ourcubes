@@ -20,6 +20,7 @@ export class VoxelRoomDO {
     };
     bucketMap = new WeakMap<WebSocket, { tokens: number; last: number }>();
     playerPresence = new Map<WebSocket, PlayerPresence>(); // Track player cursors
+    persistTimer?: number; // Timer for debounced persistence
 
     constructor(state: DurableObjectState, env: Env) {
         this.state = state;
@@ -32,8 +33,9 @@ export class VoxelRoomDO {
                 this.canvas.lamport = meta.lamport ?? 0;
             }
             if (packed) {
-                for (const [k, hex] of packed) {
-                    this.canvas.voxels.set(k, { color: hex, t: 0 });
+                for (const entry of packed) {
+                    const [k, hex, t] = entry.length === 3 ? entry : [entry[0], entry[1], 0];
+                    this.canvas.voxels.set(k, { color: hex, t });
                 }
             }
         });
@@ -163,7 +165,7 @@ export class VoxelRoomDO {
 
         if (applied.length) {
             this.canvas.version++;
-            await this.persistMaybe();
+            this.schedulePersist();
             this.broadcast({ type: "apply", ops: applied, version: this.canvas.version });
         }
     }
@@ -221,17 +223,36 @@ export class VoxelRoomDO {
 
     packState(): PackedState {
         const out: PackedState = [];
-        for (const [k, v] of this.canvas.voxels) out.push([k, v.color]);
+        for (const [k, v] of this.canvas.voxels) out.push([k, v.color, v.t]);
         return out;
     }
 
-    async persistMaybe() {
-        if (this.canvas.version % 200 === 0) {
+    schedulePersist() {
+        // Clear any existing timer
+        if (this.persistTimer) {
+            clearTimeout(this.persistTimer);
+        }
+
+        // Schedule persistence after 500ms of inactivity
+        this.persistTimer = setTimeout(async () => {
+            try {
+                await this.persist();
+            } catch (error) {
+                console.error("Failed to persist state:", error);
+            }
+        }, 500);
+    }
+
+    async persist() {
+        try {
             await this.state.storage.put("voxels", this.packState());
             await this.state.storage.put("meta", {
                 version: this.canvas.version,
                 lamport: this.canvas.lamport,
             });
+        } catch (error) {
+            console.error("Storage operation failed:", error);
+            throw error;
         }
     }
 
@@ -262,10 +283,6 @@ export class VoxelRoomDO {
             this.canvas.voxels.set(k, { color: "#FF00FF", t: ++this.canvas.lamport });
         }
         this.canvas.version++;
-        await this.state.storage.put("voxels", this.packState());
-        await this.state.storage.put("meta", {
-            version: this.canvas.version,
-            lamport: this.canvas.lamport,
-        });
+        await this.persist();
     }
 }

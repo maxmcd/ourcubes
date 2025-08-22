@@ -115,17 +115,19 @@ describe("Schema Types", () => {
     describe("PackedState", () => {
         it("should be an array of tuples", () => {
             const packedState: PackedState = [
-                [0, "#FF0000"],
-                [1000, "#00FF00"],
-                [7999, "#0000FF"],
+                [0, "#FF0000", 123],
+                [1000, "#00FF00", 456],
+                [7999, "#0000FF", 789],
             ];
 
             expect(Array.isArray(packedState)).toBe(true);
-            packedState.forEach(([key, color]) => {
+            packedState.forEach(([key, color, timestamp]) => {
                 expect(typeof key).toBe("number");
                 expect(typeof color).toBe("string");
+                expect(typeof timestamp).toBe("number");
                 expect(key).toBeGreaterThanOrEqual(0);
                 expect(key).toBeLessThan(8000);
+                expect(timestamp).toBeGreaterThan(0);
             });
         });
     });
@@ -206,14 +208,16 @@ describe("Schema Types", () => {
             const welcomeMsg: ServerMsg = {
                 type: "welcome",
                 playerId: "player123",
-                state: [[0, "#FF0000"]],
+                state: [[0, "#FF0000", 123]],
                 version: 1,
             };
 
             expect(welcomeMsg.type).toBe("welcome");
-            expect(typeof welcomeMsg.playerId).toBe("string");
-            expect(Array.isArray(welcomeMsg.state)).toBe(true);
-            expect(typeof welcomeMsg.version).toBe("number");
+            if (welcomeMsg.type === "welcome") {
+                expect(typeof welcomeMsg.playerId).toBe("string");
+                expect(Array.isArray(welcomeMsg.state)).toBe(true);
+                expect(typeof welcomeMsg.version).toBe("number");
+            }
         });
 
         it("should support apply message", () => {

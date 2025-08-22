@@ -1,8 +1,12 @@
 export const key = (x: number, y: number, z: number) => x + y * 20 + z * 400;
 
-export function unpack(packed: [number, string][]) {
+export function unpack(packed: [number, string][] | [number, string, number][]) {
     const map = new Map<number, string>();
-    for (const [k, hex] of packed) map.set(k, hex);
+    for (const entry of packed) {
+        // Handle both old format [k, hex] and new format [k, hex, timestamp]
+        const [k, hex] = entry;
+        map.set(k, hex);
+    }
     return map;
 }
 
