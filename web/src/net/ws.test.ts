@@ -67,9 +67,13 @@ describe("WebSocket Connection", () => {
         // Mock global objects
         global.WebSocket = MockWebSocket as typeof WebSocket;
         // Ensure WebSocket constants are available globally
+        // biome-ignore lint/suspicious/noExplicitAny: Required for test mocking
         (global.WebSocket as any).OPEN = MockWebSocket.OPEN;
+        // biome-ignore lint/suspicious/noExplicitAny: Required for test mocking
         (global.WebSocket as any).CLOSED = MockWebSocket.CLOSED;
+        // biome-ignore lint/suspicious/noExplicitAny: Required for test mocking
         (global.WebSocket as any).CONNECTING = MockWebSocket.CONNECTING;
+        // biome-ignore lint/suspicious/noExplicitAny: Required for test mocking
         (global.WebSocket as any).CLOSING = MockWebSocket.CLOSING;
         global.localStorage = mockLocalStorage as Storage;
 
@@ -219,9 +223,13 @@ describe("WebSocket Connection", () => {
         const sendSpy = vi.spyOn(mockWs, "send");
         global.WebSocket = vi.fn().mockImplementation(() => mockWs);
         // Add constants after overriding WebSocket constructor
+        // biome-ignore lint/suspicious/noExplicitAny: Required for test mocking
         (global.WebSocket as any).OPEN = MockWebSocket.OPEN;
+        // biome-ignore lint/suspicious/noExplicitAny: Required for test mocking
         (global.WebSocket as any).CLOSED = MockWebSocket.CLOSED;
+        // biome-ignore lint/suspicious/noExplicitAny: Required for test mocking
         (global.WebSocket as any).CONNECTING = MockWebSocket.CONNECTING;
+        // biome-ignore lint/suspicious/noExplicitAny: Required for test mocking
         (global.WebSocket as any).CLOSING = MockWebSocket.CLOSING;
 
         const { setOps, sendPresence } = connect("test-room", mockOnApply, mockOnWelcome);
