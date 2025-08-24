@@ -83,8 +83,6 @@ export function HomePage({ onJoinRoom }: HomePageProps) {
                     }}
                 >
                     Build together in 3D space.
-                    <br />
-                    Create, collaborate, and share voxel art.
                 </p>
 
                 {/* Color palette preview */}
