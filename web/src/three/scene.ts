@@ -196,9 +196,14 @@ export class VoxelScene {
     }
 
     private handleVoxelPlacement() {
-        const k = this.getVoxelAtMouse();
-        if (k !== null) {
-            this.onVoxelClick?.(k, this.currentColor);
+        if (this.currentColor === "ERASER") {
+            // When eraser is selected, act like removal
+            this.handleVoxelRemoval();
+        } else {
+            const k = this.getVoxelAtMouse();
+            if (k !== null) {
+                this.onVoxelClick?.(k, this.currentColor);
+            }
         }
     }
 

@@ -24,6 +24,7 @@ export function GameRoom({ roomSlug, onLeaveRoom }: GameRoomProps) {
         "#277da1",
         "#000000",
         "#ffffff",
+        "ERASER", // Special eraser value
     ];
     const containerRef = useRef<HTMLDivElement>(null);
     const sceneRef = useRef<VoxelScene | null>(null);
@@ -168,12 +169,25 @@ export function GameRoom({ roomSlug, onLeaveRoom }: GameRoomProps) {
                     Room: <strong>{roomSlug}</strong>
                 </span>
                 <span style={{ marginLeft: "auto" }}>Color:</span>
-                <input
-                    type="color"
-                    value={currentColor}
-                    onChange={(e) => setCurrentColor(e.target.value)}
-                    style={{ width: "40px", height: "30px" }}
-                />
+                {currentColor === "ERASER" ? (
+                    <div
+                        style={{
+                            width: "40px",
+                            height: "30px",
+                            background:
+                                "repeating-linear-gradient(45deg, transparent, transparent 2px, #999 2px, #999 4px)",
+                            border: "1px solid #999",
+                            borderRadius: "2px",
+                        }}
+                    />
+                ) : (
+                    <input
+                        type="color"
+                        value={currentColor}
+                        onChange={(e) => setCurrentColor(e.target.value)}
+                        style={{ width: "40px", height: "30px" }}
+                    />
+                )}
                 <div style={{ display: "flex", gap: "5px" }}>
                     {colors.map((color) => (
                         <button
@@ -183,14 +197,34 @@ export function GameRoom({ roomSlug, onLeaveRoom }: GameRoomProps) {
                             style={{
                                 width: "30px",
                                 height: "30px",
-                                backgroundColor: color,
+                                backgroundColor: color === "ERASER" ? "#e0e0e0" : color,
                                 border:
                                     color === currentColor ? "3px solid #333" : "1px solid #ccc",
                                 cursor: "pointer",
                                 padding: 0,
+                                position: "relative",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: "16px",
+                                fontWeight: "bold",
+                                color: "#666",
                             }}
-                            aria-label={`Select color ${color}`}
-                        />
+                            aria-label={color === "ERASER" ? "Eraser" : `Select color ${color}`}
+                        >
+                            {color === "ERASER" ? (
+                                <div
+                                    style={{
+                                        width: "20px",
+                                        height: "20px",
+                                        background:
+                                            "repeating-linear-gradient(45deg, transparent, transparent 2px, #999 2px, #999 4px)",
+                                        border: "1px solid #999",
+                                        borderRadius: "2px",
+                                    }}
+                                />
+                            ) : null}
+                        </button>
                     ))}
                 </div>
             </div>
@@ -204,7 +238,7 @@ export function GameRoom({ roomSlug, onLeaveRoom }: GameRoomProps) {
                     borderTop: "1px solid #ddd",
                 }}
             >
-                Left click to place voxel • Ctrl+click or right click to erase • Drag to rotate •
+                Left click to place voxel • Ctrl+click or right click to erase • Use ✕ eraser tool • Drag to rotate •
                 Wheel to zoom
             </div>
         </div>
