@@ -6,6 +6,7 @@ import type {
     PackedState,
     PlayerPresence,
     ServerMsg,
+    StaticRoomData,
 } from "./schema";
 
 export class VoxelRoomDO {
@@ -68,6 +69,25 @@ export class VoxelRoomDO {
             }
             await this.seedDemo();
             return new Response("ok");
+        }
+
+        if (path.endsWith("/freeze") && req.method === "POST") {
+            // Extract room slug from the URL path
+            const roomSlugMatch = path.match(/\/api\/room\/([\w-]+)\/freeze$/);
+            const roomSlug = roomSlugMatch ? roomSlugMatch[1] : "unknown";
+
+            const success = await this.freezeRoom(roomSlug);
+            if (success) {
+                return Response.json({
+                    success: true,
+                    message: "Room frozen and saved statically",
+                });
+            } else {
+                return Response.json(
+                    { success: false, message: "Failed to freeze room" },
+                    { status: 500 }
+                );
+            }
         }
 
         return new Response("not found", { status: 404 });
@@ -274,6 +294,28 @@ export class VoxelRoomDO {
             .replaceAll("+", "-")
             .replaceAll("/", "_")
             .replaceAll("=", "");
+    }
+
+    async freezeRoom(roomSlug: string): Promise<boolean> {
+        try {
+            const staticRoomData: StaticRoomData = {
+                version: this.canvas.version,
+                voxels: this.packState(),
+                frozenAt: Date.now(),
+                metadata: {
+                    roomSlug: roomSlug,
+                },
+            };
+
+            // Save to KV with key "static:{roomSlug}"
+            await this.env.STATIC_ROOMS.put(`static:${roomSlug}`, JSON.stringify(staticRoomData));
+
+            console.log(`Room ${roomSlug} frozen and saved to KV`);
+            return true;
+        } catch (error) {
+            console.error("Failed to freeze room:", error);
+            return false;
+        }
     }
 
     async seedDemo() {

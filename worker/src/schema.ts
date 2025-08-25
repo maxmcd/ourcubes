@@ -42,7 +42,17 @@ export type ServerMsg =
     | { type: "pong"; at: number; now: number }
     | { type: "presence"; players: PlayerPresence[] };
 
+export interface StaticRoomData {
+    version: number;
+    voxels: PackedState;
+    frozenAt: number; // timestamp
+    metadata: {
+        roomSlug: string;
+    };
+}
+
 export interface Env {
     VOXEL_ROOM: DurableObjectNamespace;
+    STATIC_ROOMS: KVNamespace;
     ROOM_SEED_SECRET?: string;
 }

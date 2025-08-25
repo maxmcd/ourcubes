@@ -14,6 +14,7 @@ export class VoxelScene {
     private raycaster = new THREE.Raycaster();
     private mouse = new THREE.Vector2();
     private currentColor = "#ff0000";
+    private editingEnabled = true; // Controls whether voxel editing is allowed
     private onVoxelClick?: (k: number, color: string | null) => void;
     private onCursorMove?: (cursor: [number, number, number] | null) => void;
     private lastCursorSent: [number, number, number] | null = null;
@@ -189,6 +190,8 @@ export class VoxelScene {
     }
 
     private handleVoxelRemoval() {
+        if (!this.editingEnabled) return;
+
         const existingVoxelResult = this.getExistingVoxelAtMouse();
         if (existingVoxelResult !== null) {
             this.onVoxelClick?.(existingVoxelResult, null);
@@ -196,6 +199,8 @@ export class VoxelScene {
     }
 
     private handleVoxelPlacement() {
+        if (!this.editingEnabled) return;
+
         if (this.currentColor === "ERASER") {
             // When eraser is selected, act like removal
             this.handleVoxelRemoval();
@@ -341,6 +346,10 @@ export class VoxelScene {
 
     setCurrentColor(color: string) {
         this.currentColor = color;
+    }
+
+    setEditingEnabled(enabled: boolean) {
+        this.editingEnabled = enabled;
     }
 
     setOnVoxelClick(callback: (k: number, color: string | null) => void) {
